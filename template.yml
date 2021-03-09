@@ -1,0 +1,154 @@
+# This is the SAM template that represents the architecture of your serverless application
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-basics.html
+
+# The AWSTemplateFormatVersion identifies the capabilities of the template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  wine_chain
+
+Parameters:
+  YourEmail:
+    Type: String
+  Version:
+    Type: String
+    Default: v1
+  DBEndpoint:
+    Type: String
+    Description: "Database endpoint"
+  DBName:
+    Type: String
+    NoEcho: true
+    Description: "Database name"
+  DBUsername:
+    Type: String
+    NoEcho: true
+    Description: "Username for database access"
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: "Password for database access"
+
+Globals:
+  Function:
+    Timeout: 100
+
+# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
+Transform:
+- AWS::Serverless-2016-10-31
+
+# Resources declares the AWS resources that you want to include in the stack
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
+Resources:
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  UserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+          AdminCreateUserConfig:
+            AllowAdminCreateUserOnly: false
+          UserPoolName: WineChainUsers
+          UsernameAttributes:
+          - email
+          AutoVerifiedAttributes:
+          - email
+          Policies:
+            PasswordPolicy:
+                MinimumLength: 6
+                RequireLowercase: true
+                RequireNumbers: false
+                RequireSymbols: false
+                RequireUppercase: true
+  ServiceApi:
+      DependsOn: UserPool
+      Type: AWS::Serverless::Api
+      Properties:
+        Name: ServiceApi
+        StageName: !Ref Version
+        Cors:
+          AllowMethods: "'*'"
+          AllowHeaders: "'*'"
+          AllowOrigin: "'*'"
+        Auth:
+          Authorizers:
+            CognitoAuthorizer:
+              UserPoolArn: !GetAtt "UserPool.Arn"
+####################################################################
+#Database
+####################################################################
+  WineSerialTable:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions: 
+        - AttributeName: symbol_series
+          AttributeType: S
+        - AttributeName: running_number
+          AttributeType: S
+      KeySchema: 
+        - AttributeName: symbol_series
+          KeyType: HASH
+        - AttributeName: running_number
+          KeyType: RANGE
+      ProvisionedThroughput: 
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+      TableName: wine_serial
+####################################################################
+#sqs
+####################################################################
+  SerialGeneratorSQSQueueFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      # CodeUri: src/handlers/
+      Handler: dist/serialGenerator/main.serialGeneratorFunction
+      Runtime: nodejs14.x
+      MemorySize: 128
+      Description: serialGeneratorFunction
+      Policies:
+        - AmazonDynamoDBFullAccess
+      Events:
+        MySQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt SerialGeneratorSqsQueue.Arn
+            BatchSize: 1
+  SerialGeneratorSqsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 200
+####################################################################
+#Lambda
+####################################################################
+  helloFromLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      # CodeUri: src/handlers/
+      Handler: src/handlers/hello-from-lambda.helloFromLambdaHandler
+      Runtime: nodejs14.x
+      MemorySize: 128
+      Description: A Lambda function that returns a static string.
+      Policies:
+        - VPCAccessPolicy: {}
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSg
+        SubnetIds: !Ref LambdaSubnets
+      Environment:
+        Variables:
+          DB_HOST: !Ref DBEndpoint
+          DB_PORT: 3306
+          DB_USER: !Ref DBUsername
+          DB_PASSWORD: !Ref DBPassword
+          DB_NAME: !Ref DBName
+      # Events:
+      #   HttpPost:
+      #     Type: Api
+      #     Properties:
+      #       Path: '/hello'
+      #       RestApiId: !Ref ServiceApi
+      #       Method: post
+      #       Auth:
+      #          Authorizer: CognitoAuthorizer

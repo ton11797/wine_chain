@@ -1,0 +1,10 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "wineChain"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1ktfmdoosq5vq"
+s3_prefix = "wineChain"
+region = "ap-southeast-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "YourEmail=\"ton11797@hotmail.com\" Version=\"v1\""
