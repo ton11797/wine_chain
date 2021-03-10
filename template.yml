@@ -13,20 +13,20 @@ Parameters:
   Version:
     Type: String
     Default: v1
-  DBEndpoint:
+  PGHOST:
     Type: String
     Description: "Database endpoint"
-  DBName:
+  PGPORT:
     Type: String
-    NoEcho: true
+    Description: "Database port"
+  PGDATABASE:
+    Type: String
     Description: "Database name"
-  DBUsername:
+  PGUSER:
     Type: String
-    NoEcho: true
     Description: "Username for database access"
-  DBPassword:
+  PGPASSWORD:
     Type: String
-    NoEcho: true
     Description: "Password for database access"
 
 Globals:
@@ -109,6 +109,13 @@ Resources:
       Description: serialGeneratorFunction
       Policies:
         - AmazonDynamoDBFullAccess
+      Environment:
+        Variables:
+          PGHOST: !Ref PGHOST
+          PGPORT: !Ref PGPORT
+          PGUSER: !Ref PGUSER
+          PGPASSWORD: !Ref PGPASSWORD
+          PGDATABASE: !Ref PGDATABASE
       Events:
         MySQSEvent:
           Type: SQS
@@ -122,33 +129,49 @@ Resources:
 ####################################################################
 #Lambda
 ####################################################################
-  helloFromLambdaFunction:
+  serialGeneratorPost:
     Type: AWS::Serverless::Function
     Properties:
-      # CodeUri: src/handlers/
-      Handler: src/handlers/hello-from-lambda.helloFromLambdaHandler
+      Handler: dist/serialGenerator/main.serialGeneratorPost
       Runtime: nodejs14.x
       MemorySize: 128
-      Description: A Lambda function that returns a static string.
+      Description: serialGeneratorPost.
       Policies:
         - VPCAccessPolicy: {}
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSg
-        SubnetIds: !Ref LambdaSubnets
       Environment:
         Variables:
-          DB_HOST: !Ref DBEndpoint
-          DB_PORT: 3306
-          DB_USER: !Ref DBUsername
-          DB_PASSWORD: !Ref DBPassword
-          DB_NAME: !Ref DBName
-      # Events:
-      #   HttpPost:
-      #     Type: Api
-      #     Properties:
-      #       Path: '/hello'
-      #       RestApiId: !Ref ServiceApi
-      #       Method: post
-      #       Auth:
-      #          Authorizer: CognitoAuthorizer
+          PGHOST: !Ref PGHOST
+          PGPORT: !Ref PGPORT
+          PGUSER: !Ref PGUSER
+          PGPASSWORD: !Ref PGPASSWORD
+          PGDATABASE: !Ref PGDATABASE
+      Events:
+        HttpPost:
+          Type: Api
+          Properties:
+            Path: '/serialGenerator'
+            RestApiId: !Ref ServiceApi
+            Method: post
+  serialGeneratorGet:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/serialGenerator/main.serialGeneratorGet
+      Runtime: nodejs14.x
+      MemorySize: 128
+      Description: serialGeneratorPost.
+      Policies:
+        - VPCAccessPolicy: {}
+      Environment:
+        Variables:
+          PGHOST: !Ref PGHOST
+          PGPORT: !Ref PGPORT
+          PGUSER: !Ref PGUSER
+          PGPASSWORD: !Ref PGPASSWORD
+          PGDATABASE: !Ref PGDATABASE
+      Events:
+        HttpPost:
+          Type: Api
+          Properties:
+            Path: '/serialGenerator'
+            RestApiId: !Ref ServiceApi
+            Method: get
